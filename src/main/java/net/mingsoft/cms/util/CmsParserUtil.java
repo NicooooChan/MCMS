@@ -9,6 +9,8 @@ import freemarker.template.Template;
 import freemarker.template.TemplateException;
 import freemarker.template.TemplateNotFoundException;
 import net.mingsoft.base.constant.Const;
+import net.mingsoft.basic.biz.IAppBiz;
+import net.mingsoft.basic.entity.AppEntity;
 import net.mingsoft.basic.util.BasicUtil;
 import net.mingsoft.basic.util.SpringUtil;
 import net.mingsoft.cms.bean.ContentBean;
@@ -35,6 +37,17 @@ public class CmsParserUtil extends ParserUtil {
 	 * 封面
 	 */
 	private static int COLUMN_TYPE_COVER = 2;
+
+	private static String appUrl = "";
+
+	private static String getAppUrl(){
+	    if(StringUtils.isBlank(appUrl)){
+            IAppBiz websiteBiz = SpringUtil.getBean(IAppBiz.class);
+            AppEntity website = websiteBiz.getByUrl(BasicUtil.getDomain());
+            appUrl = website.getAppUrl();
+        }
+	    return appUrl;
+    }
 
 	/**
 	 * 指定模板，指定路径进行生成静态页面，会自定识别pc与移动端
@@ -115,13 +128,10 @@ public class CmsParserUtil extends ParserUtil {
 				parserParams.put(IS_DO, false);
 				parserParams.put(HTML, HTML);
 				parserParams.put(APP_ID, BasicUtil.getAppId());
+                parserParams.put(URL, getAppUrl());
 				if (contentModel!=null) {
 					// 将自定义模型编号设置为key值
 					parserParams.put(TABLE_NAME, contentModel.getModelTableName());
-				}
-				//如果单站点，就废弃站点地址
-				if(ParserUtil.IS_SINGLE) {
-					parserParams.put(ParserUtil.URL, BasicUtil.getUrl());
 				}
 
 				//文章列表页没有写文章列表标签，总数为0
@@ -297,4 +307,35 @@ public class CmsParserUtil extends ParserUtil {
 			artId++;
 		}
 	}
+
+    public static String generate(String templatePath, Map params, boolean isMobile)
+            throws TemplateNotFoundException, MalformedTemplateNameException, ParseException, IOException {
+
+        params.put(URL, getAppUrl());
+        //设置生成的路径
+        params.put(HTML, HTML);
+        //设置站点编号
+        params.put(APP_ID, BasicUtil.getAppId());
+        if (ftl == null || !ParserUtil.buildTempletPath().equals(ftl.baseDir.getPath())) {
+            ftl = new FileTemplateLoader(new File(ParserUtil.buildTempletPath()));
+            cfg.setNumberFormat("#");
+            cfg.setTemplateLoader(ftl);
+        }
+        // 读取模板文件
+        Template template = cfg.getTemplate((isMobile ? (BasicUtil.getApp().getAppMobileStyle() + File.separator) : "") + templatePath, Const.UTF8);
+        // pc端内容
+        StringWriter writer = new StringWriter();
+        TagParser tag = null;
+        String content = null;
+        try {
+            template.process(null, writer);
+            tag = new TagParser(writer.toString(), params);
+            content = tag.rendering();
+            return content;
+        } catch (TemplateException e) {
+            e.printStackTrace();
+            LOG.error("错误",e);
+        }
+        return null;
+    }
 }
